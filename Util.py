@@ -1,13 +1,47 @@
 # coding:utf-8
 import re
 import numpy as np
-import datetime
+import random
+import timeit
 Infinite = 1000000
 
+# 轮盘的逆操作，fitness越大被选中的概率越低
+def reversewheelselection(fitness):
+    fitness = list(fitness)
+    maxfitness = max(fitness)
+    newvalue = fitness
+    for ind, val in enumerate(newvalue):
+         newvalue[ind] = maxfitness - val
+    return wheelselection(newvalue)
+
+
+
+"""
+Basic roulette wheel selection: O(N)
+"""
+def wheelselection(fitness):
+    '''
+    Input: a list of N fitness values (list or tuple)
+    Output: selected index
+    author: Created on Mon Feb 29, 2016
+    @author: mangwang
+    @source: https://github.com/mangwang/PythonForFun/blob/master/rouletteWheelSelection.py
+    '''
+    sumFits = sum(fitness)
+    # generate a random number
+    rndPoint = random.uniform(0, sumFits)
+    # calculate the index: O(N)
+    accumulator = 0.0
+    for ind, val in enumerate(fitness):
+        accumulator += val
+        if accumulator >= rndPoint:
+            return ind, val
+
+
 def showDuration(begin, name):
-    end = datetime.datetime.now()
-    print("%s: %s" % (name, str(end - begin)))
-    return datetime.datetime.now()
+    end = timeit.default_timer()
+    #print("%s: %s" % (name, str(end - begin)))
+    return timeit.default_timer()
 
 def tokenization(content):
     result = []

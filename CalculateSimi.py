@@ -49,12 +49,16 @@ class CalculateSimilary:
 
     #计算总体相似度
     def simi(self, m1, m2):
-
+        begin = datetime.datetime.now()
         dependence = self.simiDependence(m1, m2)
+        begin = showDuration(begin, "dependence")
         lexical = self.simiLexical(m1, m2)
+        begin = showDuration(begin, "lexical")
         location = self.simiLocation(m1, m2)
-        print("dependence: %f, lexical：%f, location: %f " % (dependence,lexical, location ))
-        return (dependence + lexical + location ) / 3
+        begin = showDuration(begin, "location")
+        #if (dependence + lexical + location ) / 3 > 1:
+        #print("dependence: %f, lexical：%f, location: %f " % (dependence,lexical, location ))
+        return location, dependence, lexical, (dependence + lexical + location ) / 3
 
     collection = {}
 
@@ -84,7 +88,3 @@ class CalculateSimilary:
 
 
 
-calculate = CalculateSimilary()
-m1 = "org.gjt.sp.jedit.Buffer.load(org.gjt.sp.jedit.View,boolean)"
-m2 = "org.gjt.sp.util.Log._logException(int,java.lang.Object,java.lang.Throwable)"
-print(calculate.simi(m1,m2))

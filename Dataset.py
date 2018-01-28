@@ -2,28 +2,56 @@
 import sqlite3 as db
 import numpy as np
 import datetime
+import io
 from Method import  *
 from Util import *
 
 class Dataset:
 
     def __init__(self):
-        self.sqlite_conn = db.connect("resource/ast.db")
-        self.cursor = self.sqlite_conn.cursor()
-        self.cursor.execute("select name, className, content from methodinfo")
-        self.methods = []
-        for methodinfo in self.cursor.fetchall():
-            self.methods.append( Method(methodinfo) )
 
-        self.cursor.execute('select callMethodName, calledMethodName from methodInvocationinfo')
+        self.sqlite_conn = db.connect("resource/ast.db", check_same_thread=False)
+        self.cursor = self.sqlite_conn.cursor()
+        self.initialDatabase()
+        sql = "select name, className, content from methodinfo "
+        self.methods = []
+        self.methodNames = []
+        for methodinfo in self.executequery(sql):
+            self.methods.append( Method(methodinfo))
+            self.methodNames.append(methodinfo[0])
+        sql ='select callMethodName, calledMethodName from methodInvocationinfo'
         self.invocations = []
-        for invocation in self.cursor.fetchall():
+        for invocation in self.executequery(sql):
             self.invocations.append(MethodInovation(invocation) )
 
-        self.cursor.execute('select ID,origiMethods, methods from goldSets ')
+        sql = 'select ID,origiMethods, methods from goldSets '
         self.goldSet =[]
-        for item in self.cursor.fetchall():
+        for item in self.executequery(sql):
             self.goldSet.append(GoldSet(item))
+
+    def initialDatabase(self):
+        fo = open('resource/createTables.sql', 'r')
+        fc = fo.readlines()
+        fo.close()
+        str = " ".join(fc)
+        statements = str.split(';')
+        for statement in statements:
+            self.execute(statement)
+        fo = open('resource/createIndexs.sql','r')
+        fc = fo.readlines()
+        fo.close()
+        str = " ".join(fc).lower()
+        statements = str.split(';')
+        for statement in statements:
+            begin = statement.find("[")
+            end  = statement.find("]")
+            name = statement[begin+1: end]
+            sql = "SELECT name FROM sqlite_master WHERE type = 'index' and name = '%s'" % name
+            result = self.executequery(sql)
+            if len(result) == 0:
+                self.execute(statement)
+        self.commit()
+
 
 
     def __del__(self):
@@ -42,9 +70,9 @@ class Dataset:
         return self.goldSet
 
     def getEntrancePoint(self):
-        self.cursor.execute("select ID, methods from entrancePointInfo")
+        sql = "select ID, methods from entrancePointInfo"
         entrancepoints = []
-        for entrancepoint in self.cursor.fetchall():
+        for entrancepoint in self.executequery(sql):
             entrancepoints.append(EntrancePoint(entrancepoint))
         return entrancepoints
 
@@ -52,34 +80,25 @@ class Dataset:
     def getAllMethodInvocation(self):
         return self.invocations
 
+    #获取项目中所有方法名称
+    def getAllMethodName(self):
+        return self.methodNames
 
     #获取项目中所有的方法
     def getAllMethod(self):
         return self.methods
 
     def getAllInvocateMethod(self):
-        self.cursor.execute("select name from methodinfo where name in (  select callmethodname from methodinvocationinfo  union select calledmethodname from methodinvocationinfo )")
-        return self.cursor.fetchall()
-
-    def getDemo(self):
-        documents =[]
-        documents.append("China supports DPRK, ROK in fostering trust, building consensus through dialogue")
-        documents.append("Media reported that the DPRK and ROK Wednesday agreed to let their athletes march together under the unified flag of the Korean Peninsula at the opening ceremony of the Pyeongchang Winter Olympics next month.")
-        documents.append("The agreement was reached at vice ministerial-level talks between the two countries, which were held Wednesday at Peace House, a building on the South Korean side of Panmunjom which straddles the heavily guarded border.")
-        documents.append("Meanwhile, ROK Foreign Minister Kang Kyung-wha said the ROK will push forward dialogue for the peaceful resolution of the nuclear issue on the Korean Peninsula.")
-        return documents
-
+        sql = "select name from methodinfo where name in (  select callmethodname from methodinvocationinfo  union select calledmethodname from methodinvocationinfo )"
+        return self.executequery(sql)
 
     def getMethodIndex(self, methodName):
-        for i in range(0, len(self.methods)):
-            if self.methods[i].name == methodName:
-                return i
-
+        return self.methodNames.index(methodName)
 
     def getCallBy(self, methodName):
-        self.cursor.execute("select calledMethodName where callMethodName = % " % methodName)
+        sql = "select calledMethodName where callMethodName = % " % methodName
         methods = []
-        for name in self.cursor.fetchall():
+        for name in self.executequery(sql):
             methods.appnd( name[0] )
         return methods
 
@@ -94,78 +113,51 @@ class Dataset:
     def commit(self):
         self.sqlite_conn.commit()
 
+    def executequery(self, query):
+        result = self.cursor.execute(query)
+        result = result.fetchall()
+        return result
+
                #计算距离依赖相似度
     def simiDist(self, m1, m2):
         sql = 'select length from simDistance where callMethodName = "%s" and calledMethodName = "%s"'%(m1,m2)
-        sqlresult = self.execute(sql)
-        length = sqlresult.fetchone()
-        if length == None: return 0
-        return np.power(0.7,length)
+        length = self.executequery(sql)
+        if len(length)  == 0: return 0
+        return np.power(0.7,length[0])
 
 
      #计算上下文依赖相似度
     def simiContext(self, m1, m2):
+        begin = datetime.datetime.now()
         #被m1调用的方法 intersect 被m2调用的方法集合
         sql = 'select calledMethodname from methodinvocationinfo where callmethodName = "%s" ' % m1
-        self.execute(sql)
-        calledmethod_m1 = set(self.cursor.fetchall())
+        calledmethod_m1 = set(self.executequery(sql))
         sql = 'select calledMethodname from methodinvocationinfo where callmethodName = "%s" ' %  m2
-        self.execute(sql)
-        calledmethod_m2 = set(self.cursor.fetchall())
+        calledmethod_m2 = set(self.executequery(sql))
         calledintersect = calledmethod_m1.intersection(calledmethod_m2)
         calledunion = calledmethod_m1.union(calledmethod_m2)
+        begin = showDuration(begin, "called")
         #调用m1的方法集合 intersect 调用m2的方法集合
         sql = 'select callMethodname from methodinvocationinfo where calledmethodName = "%s"' % m1
-        self.execute(sql)
-        callmethod_m1 = set(self.cursor.fetchall())
+        callmethod_m1 = set(self.executequery(sql))
         sql ='select callMethodname from methodinvocationinfo where calledmethodName = "%s" ' %  m2
-        self.execute(sql)
-        callmethod_m2 = set(self.cursor.fetchall())
+        callmethod_m2 = set(self.executequery(sql))
         callintersect = callmethod_m1.intersection(callmethod_m2)
         callunion = callmethod_m1.union(callmethod_m2)
-
+        begin = showDuration(begin, "call")
         #被m1访问的成员变量 intersect 被m2 访问的成员变量集合
         sql = 'select name from variableinfo where  isField = 1 and belongedMethod = "%s"' % m1
-        self.execute(sql)
-        access_m1 = set(self.cursor.fetchall())
+        access_m1 = set(self.executequery(sql))
         sql = 'select name from variableinfo where  isField = 1 and belongedMethod = "%s"' %  m2
-        self.execute(sql)
-        access_m2 = set(self.cursor.fetchall())
+        access_m2 = set(self.executequery(sql))
         accessintersect = access_m1.intersection(access_m2)
         accessunion = access_m1.union(access_m2)
+        begin = showDuration(begin, "access")
+        if ( len(callunion) + len(calledunion) + len(accessunion)) == 0 : return 0
         return ( len(callintersect) + len(calledintersect) + len(accessintersect)) / ( len(callunion) + len(calledunion) + len(accessunion))
 
+ds = Dataset()
+ds.initialDatabase()
 
-
-
-'''
-  #计算上下文依赖相似度
-    def simiContext(self, m1, m2):
-        #调用m1的方法集合 intersect 调用m2的方法集合
-        sql = 'select callMethodname from methodinvocationinfo where calledmethodName = "%s" intersect select callMethodname from methodinvocationinfo where calledmethodName = "%s" ' % (m1, m2)
-        self.execute(sql)
-        callintersect = self.cursor.fetchall()
-        #被m1调用的方法 intersect 被m2调用的方法集合
-        sql = 'select calledMethodname from methodinvocationinfo where callmethodName = "%s" intersect select calledMethodname from methodinvocationinfo where callmethodName = "%s" ' % (m1, m2)
-        self.execute(sql)
-        calledintersect = self.cursor.fetchall()
-        #被m1访问的成员变量 intersect 被m2 访问的成员变量集合
-        sql = 'select name from variableinfo where  isField = 1 and belongedMethod = "%s" intersect select name from variableinfo where  isField = 1 and belongedMethod = "%s"' % (m1, m2)
-        self.execute(sql)
-        accessintersect = self.cursor.fetchall()
-		#调用m1的方法集合 union 调用m2的方法集合
-        sql = 'select callMethodname from methodinvocationinfo where calledmethodName = "%s" union select callMethodname from methodinvocationinfo where calledmethodName = "%s" ' % (m1, m2)
-        self.execute(sql)
-        callunion = self.cursor.fetchall()
-		#被m1调用的方法 union 被m2调用的方法集合
-        sql = 'select calledMethodname from methodinvocationinfo where callmethodName = "%s" union select calledMethodname from methodinvocationinfo where callmethodName = "%s" ' % (m1, m2)
-        self.execute(sql)
-        calledunion = self.cursor.fetchall()
-        #被m1访问的成员变量 union 被m2 访问的成员变量集合
-        sql = 'select name from variableinfo where  isField = 1 and belongedMethod = "%s" union select name from variableinfo where isField = 1 and belongedMethod = "%s"' % (m1, m2)
-        self.execute(sql)
-        accessunion = self.cursor.fetchall()
-        return ( len(callintersect) + len(calledintersect) + len(accessintersect)) / ( len(callunion) + len(calledunion) + len(accessunion))
-'''
 
 
