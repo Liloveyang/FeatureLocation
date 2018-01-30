@@ -3,7 +3,7 @@
 from gensim import corpora, models, similarities
 from Util import tokenization
 
-
+#计算TFIDF
 class TFIDFAlg:
 
     def __init__(self, corpora_documents):

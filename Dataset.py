@@ -6,8 +6,10 @@ import io
 from Method import  *
 from Util import *
 
+#对数据库的操作
 class Dataset:
 
+#todo: 需要将该类变为单例模式
     def __init__(self):
 
         self.sqlite_conn = db.connect("resource/ast.db", check_same_thread=False)
@@ -28,6 +30,13 @@ class Dataset:
         self.goldSet =[]
         for item in self.executequery(sql):
             self.goldSet.append(GoldSet(item))
+        #用于计算距离
+        self.dic_distance = {}
+        sql = 'select callmethodname, calledmethodname, length from simdistance'
+        for distance in self.executequery(sql):
+            if( (distance[0], distance[1]) in self.dic_distance.keys() == False ):
+                self.dic_distance[distance[0], distance[1]] = np.power(0.7, distance[2])
+
 
     def initialDatabase(self):
         fo = open('resource/createTables.sql', 'r')
@@ -53,6 +62,15 @@ class Dataset:
         self.commit()
 
 
+    def saverecommendresult(self, recommendresult):
+
+        content = []
+        sql = "insert into recommendresult( ID, methodName, islike,rounds) values (?, ?, ?, ?)"
+        for result in recommendresult:
+            content.append((result.ID, result.methodName, result.islike, result.rounds ))
+        self.executemany(sql, content)
+        self.commit()
+
 
     def __del__(self):
         self.cursor.close()
@@ -68,6 +86,13 @@ class Dataset:
 
     def getGoldSets(self):
         return self.goldSet
+
+
+
+    def getRecommendResult(self):
+        sql = "select ID, methodName, islike from recommendResult order by ID, rounds"
+        return self.executequery(sql)
+
 
     def getEntrancePoint(self):
         sql = "select ID, methods from entrancePointInfo"
@@ -118,12 +143,19 @@ class Dataset:
         result = result.fetchall()
         return result
 
+    def executeupdate(self, query):
+        self.cursor.execute(query)
+        self.commit()
+
                #计算距离依赖相似度
     def simiDist(self, m1, m2):
-        sql = 'select length from simDistance where callMethodName = "%s" and calledMethodName = "%s"'%(m1,m2)
-        length = self.executequery(sql)
-        if len(length)  == 0: return 0
-        return np.power(0.7,length[0])
+        result = 0
+        if (m1,m2) in self.dic_distance.keys():
+            result = self.dic_distance[m1,m2]
+        if( m2,m1) in self.dic_distance.keys():
+            if( result < self.dic_distance[m2,m1] ):
+                result = self.dic_distance[m2,m1]
+        return result
 
 
      #计算上下文依赖相似度
@@ -156,8 +188,7 @@ class Dataset:
         if ( len(callunion) + len(calledunion) + len(accessunion)) == 0 : return 0
         return ( len(callintersect) + len(calledintersect) + len(accessintersect)) / ( len(callunion) + len(calledunion) + len(accessunion))
 
-ds = Dataset()
-ds.initialDatabase()
+
 
 
 

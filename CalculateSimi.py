@@ -7,7 +7,7 @@ from TFIDFAlg import *
 from Util import *
 import datetime
 
-
+#用于计算各种相似度
 class CalculateSimilary:
 
     def __init__(self):
@@ -17,6 +17,8 @@ class CalculateSimilary:
         for method in self.allMethods:
             contents.append(method.content)
         self.tfidf = TFIDFAlg(contents)
+        self.calcuatedsimi ={}
+
 
     def simiDependence(self,m1,m2):
 
@@ -49,13 +51,12 @@ class CalculateSimilary:
 
     #计算总体相似度
     def simi(self, m1, m2):
-        begin = datetime.datetime.now()
+        if (m1,m2) in self.calcuatedsimi.keys():
+            return self.calcuatedsimi[m1,m2]
         dependence = self.simiDependence(m1, m2)
-        begin = showDuration(begin, "dependence")
         lexical = self.simiLexical(m1, m2)
-        begin = showDuration(begin, "lexical")
         location = self.simiLocation(m1, m2)
-        begin = showDuration(begin, "location")
+        self.calcuatedsimi[m1,m2] = (location, dependence, lexical, (dependence + lexical + location ) / 3)
         #if (dependence + lexical + location ) / 3 > 1:
         #print("dependence: %f, lexical：%f, location: %f " % (dependence,lexical, location ))
         return location, dependence, lexical, (dependence + lexical + location ) / 3

@@ -1,9 +1,9 @@
 from Dataset import *
-import random
 import os
 from Util import *
 import re
 
+#数据预处理，主要是处理数据库中的各种数据
 def processGoldensets(oldmethod):
     #找不到该方法
     delete =['org.gjt.sp.jedit.PluginJAR.jarCompare(String,String)',
@@ -245,22 +245,21 @@ def createEntrancePoint():
 
 #createEntrancePoint()
 # 调用关系字典，key为(调用者，被调用者), value = 1
-invocationDic = {}
+#invocationDic = {}
 # 直接调用关系字典， key为调用者, value 为所有被key调用的方法
-invocatorDic = {}
-def recuitInvocate(invocator, invocated, length):
 
-    print("%s call %s, %d" %(invocator, invocated, length) )
-    if length >= 10: return
-    length +=1
+def recuitInvocate(invocationDic,invocatorDic, invocator, invocated, length):
+    print("count: %d, lenght: %d" % (len(invocationDic.keys()), length))
+    if length >= 11: return
     if (invocator, invocated) in invocationDic.keys():
         if invocationDic[invocator, invocated] > length:
             invocationDic[invocator, invocated] = length
     else:
         invocationDic[invocator, invocated] = length
+    length +=1
     if invocated in invocatorDic.keys():
         for nextInvocated in invocatorDic[invocated]:
-            recuitInvocate(invocator, nextInvocated, length)
+            recuitInvocate(invocationDic,invocatorDic,invocator, nextInvocated, length)
 
 
 def createRecuitdistanInvocate():
@@ -276,22 +275,25 @@ def createRecuitdistanInvocate():
     invocators = []
     for item in temp:
         invocators.append(item[0])
+    invocatorDic ={}
+    #保存存在直接调用关系的方法对
     for invocator in invocators:
         invocatorDic[invocator] = []
     ds.execute("select callMethodName, calledMethodName from methodinvocationinfo")
     for invocation in ds.cursor.fetchall():
         invocation = MethodInovation(invocation)
-        invocatorDic[invocation.callMethod].append(invocation.calledMethod)
+        if( invocatorDic[invocation.callMethod].count(invocation.calledMethod) ==0):
+            invocatorDic[invocation.callMethod].append(invocation.calledMethod)
     for invocator in invocators:
         for invocated in invocatorDic[invocator]:
-            recuitInvocate(invocator, invocated, 1)
+            recuitInvocate(invocationDic, invocatorDic,invocator, invocated, 1)
     content = []
     sql = "insert into simDistance( callMethodName, calledMethodName, length) values (?, ?, ?)"
     for key in invocationDic.keys():
         content.append((key[0], key[1], invocationDic[key]))
     ds.executemany(sql, content)
     ds.commit()
-#createRecuitdistanInvocate()
-createEntrancePoint()
+createRecuitdistanInvocate()
+#createEntrancePoint()
 
 
