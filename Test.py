@@ -1,4 +1,5 @@
 import sqlite3
+import numpy as np
 from CalculateSimi import *
 
 #一些额外的操作，例如将父类中的方法加入到子类中，但在本次实现中没用调用
@@ -47,5 +48,21 @@ def enrichChild(superClass, ds):
 
 
 
+s = set()
+s.add(5)
+s.add(6)
+t = set()
+t.add(5)
+s = s.difference(t)
+print (s)
 
 
+'''
+ds = Dataset()
+goldsets = ds.getGoldSets()
+counts = []
+for goldset in goldsets:
+    methods = goldset.methods[:-1].split("\n")
+    counts.append(len(methods))
+print("mean: %f, average: %f, max: %d, sum :%d" % (np.mean(counts), np.average(counts), np.max(counts), np.sum(counts)))
+'''

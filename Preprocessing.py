@@ -236,10 +236,19 @@ def createEntrancePoint():
     for goldset in goldsets:
         ID, methods = goldset.ID, goldset.methods
         methods = methods[: -1].split("\n")
+        if len(methods) == 1:
+            print(ID)
+            continue
         count = np.ceil( len(methods) /5 )
-        slice = random.sample(methods, int(count))
-        slice = "\n".join(slice)
-        content.append((ID, slice))
+        exists =[]
+        for i in range(0, 100):
+            slice = random.sample(methods, int(count))
+            slice = "\n".join(slice)
+            #重复的就不要再加进去了，但是计数还是要的
+            if exists.count(slice) > 0:
+                continue
+            exists.append(slice)
+            content.append((ID, slice))
     ds.executemany(sql, content)
     ds.commit()
 
@@ -293,7 +302,7 @@ def createRecuitdistanInvocate():
         content.append((key[0], key[1], invocationDic[key]))
     ds.executemany(sql, content)
     ds.commit()
-createRecuitdistanInvocate()
-#createEntrancePoint()
+#createRecuitdistanInvocate()
+createEntrancePoint()
 
 
